@@ -2,7 +2,8 @@ require('dotenv').config();
 const axios = require('axios');
 
 const JOTFORM_API_KEY = process.env.JOTFORM_API_KEY;
-const GHL_WEBHOOK_URL = "https://services.leadconnectorhq.com/hooks/NzbVVSNFa2G2M2oCiRWD/webhook-trigger/403456bf-d309-46ed-85f5-d7e822b62909";
+// This now points to your Render "Bridge" instead of GHL directly
+const BRIDGE_URL = "https://vapitoghl.onrender.com/webhook/jotform";
 
 async function setupJotformWebhooks() {
     try {
@@ -12,7 +13,7 @@ async function setupJotformWebhooks() {
         });
 
         const forms = formsResponse.data.content;
-        console.log(`Found ${forms.length} forms. Connecting to GHL Master Router...`);
+        console.log(`Found ${forms.length} forms. Connecting to the Bridge...`);
 
         for (const form of forms) {
             try {
@@ -22,19 +23,19 @@ async function setupJotformWebhooks() {
                 });
 
                 const existingWebhooks = Object.values(webhooksResponse.data.content || {});
-                if (existingWebhooks.includes(GHL_WEBHOOK_URL)) {
-                    console.log(`✅ Form "${form.title}" (ID: ${form.id}) is already connected.`);
+                if (existingWebhooks.includes(BRIDGE_URL)) {
+                    console.log(`✅ Form "${form.title}" (ID: ${form.id}) is already bridged.`);
                     continue;
                 }
 
                 // Add the webhook
-                await axios.post(`https://api.jotform.com/form/${form.id}/webhooks`, `webhookURL=${encodeURIComponent(GHL_WEBHOOK_URL)}`, {
+                await axios.post(`https://api.jotform.com/form/${form.id}/webhooks`, `webhookURL=${encodeURIComponent(BRIDGE_URL)}`, {
                     headers: {
                         'APIKEY': JOTFORM_API_KEY,
                         'Content-Type': 'application/x-www-form-urlencoded'
                     }
                 });
-                console.log(`🚀 Connected Form: "${form.title}" (ID: ${form.id})`);
+                console.log(`🚀 Bridged Form: "${form.title}" (ID: ${form.id})`);
             } catch (formErr) {
                 console.error(`❌ Could not connect Form "${form.title}":`, formErr.message);
             }

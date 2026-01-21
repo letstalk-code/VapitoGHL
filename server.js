@@ -7,6 +7,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
 
 // GHL Config from .env
 const GHL_TOKEN = process.env.GHL_ACCESS_TOKEN;
@@ -87,12 +88,66 @@ async function bookGHLAppointment(name, email, phone, startTime) {
     }
 }
 
+/**
+ * BRIDGE: JotForm to GHL
+ * This route translates JotForm's internal codes into "Pretty" fields for GHL.
+ */
+app.post('/webhook/jotform', async (req, res) => {
+    try {
+        // JotForm can send data as JSON or URL Encoded. bodyParser handles both.
+        const data = req.body;
+
+        console.log('📬 [JotForm Bridge] Received data for form:', data.formTitle || data.formID);
+
+        // Helper to find a field by a partial name (in case Q IDs change)
+        const findField = (regex) => {
+            const key = Object.keys(data).find(k => regex.test(k));
+            return key ? data[key] : null;
+        };
+
+        // Extract Bride/Groom Name components
+        const bride = data.q15_bridesName || findField(/bridesName/i) || {};
+        const groom = data.q85_groomsName || findField(/groomsName/i) || {};
+        const weddingDate = data.q117_weddingDate || findField(/weddingDate/i) || {};
+
+        const prettyData = {
+            form_id: data.formID || "",
+            form_title: data.formTitle || "",
+            first_name: bride.first || (typeof bride === 'string' ? bride.split(' ')[0] : ""),
+            last_name: bride.last || (typeof bride === 'string' ? bride.split(' ').slice(1).join(' ') : ""),
+            email: data.q113_email || data.email114 || data.email || findField(/email/i) || "",
+            phone: data.q37_phoneNumber || findField(/phone/i) || "",
+            brides_first_name: bride.first || "",
+            brides_last_name: bride.last || "",
+            grooms_first_name: groom.first || "",
+            grooms_last_name: groom.last || "",
+            event_date: weddingDate.month ? `${weddingDate.month}/${weddingDate.day}/${weddingDate.year}` : (typeof weddingDate === 'string' ? weddingDate : ""),
+            venue_location: data.q88_weddingCeremony88 || findField(/ceremony/i) || "",
+            reception_location: data.q89_weddingReception || findField(/reception/i) || ""
+        };
+
+        console.log('✨ Data cleaned. Forwarding to GHL...');
+
+        // Forward to GHL Master Router
+        const ghlWebhookUrl = "https://services.leadconnectorhq.com/hooks/NzbVVSNFa2G2M2oCiRWD/webhook-trigger/403456bf-d309-46ed-85f5-d7e822b62909";
+        await axios.post(ghlWebhookUrl, prettyData);
+
+        console.log('✅ Success! Forwarded to GHL for:', prettyData.first_name);
+        res.status(200).send({ status: "success" });
+    } catch (error) {
+        console.error('❌ JotForm Bridge Error:', error.message);
+        res.status(500).send({ error: error.message });
+    }
+});
+
+/**
+ * VAPI Webhook Route
+ */
 app.post('/webhook/vapi', async (req, res) => {
     try {
         const payload = req.body;
         const message = payload.message || payload;
 
-        // --- TOOL CALLS ---
         if (message.type === 'tool-calls') {
             const toolCall = message.toolCalls[0];
             const functionName = toolCall.function.name;
@@ -113,7 +168,6 @@ app.post('/webhook/vapi', async (req, res) => {
             });
         }
 
-        // --- END OF CALL ---
         if (message.type === 'end-of-call-report') {
             const analysis = message.analysis || {};
             const structuredData = analysis.structuredData || {};
@@ -131,46 +185,9 @@ app.post('/webhook/vapi', async (req, res) => {
             }
         }
 
-        // --- JOTFORM BRIDGE ---
-        app.post('/webhook/jotform', async (req, res) => {
-            try {
-                const data = req.body;
-
-                // Translate JotForm "ugly" codes into your "pretty" GHL fields
-                const prettyData = {
-                    form_id: data.formID || "",
-                    form_title: data.formTitle || "",
-                    first_name: data.q15_bridesName?.first || data.q15_bridesName || "",
-                    last_name: data.q15_bridesName?.last || "",
-                    email: data.q113_email || data.email || "",
-                    phone: data.q37_phoneNumber || data.phone || "",
-                    brides_first_name: data.q15_bridesName?.first || "",
-                    brides_last_name: data.q15_bridesName?.last || "",
-                    grooms_first_name: data.q85_groomsName?.first || "",
-                    grooms_last_name: data.q85_groomsName?.last || "",
-                    event_date: `${data.q117_weddingDate?.month}/${data.q117_weddingDate?.day}/${data.q117_weddingDate?.year}` || "",
-                    venue_location: data.q88_weddingCeremony88 || "",
-                    reception_location: data.q89_weddingReception || ""
-                };
-
-                console.log('📬 Received JotForm signature for:', prettyData.form_title);
-
-                // Forward to GHL Master Router
-                const ghlWebhookUrl = "https://services.leadconnectorhq.com/hooks/NzbVVSNFa2G2M2oCiRWD/webhook-trigger/403456bf-d309-46ed-85f5-d7e822b62909";
-                await axios.post(ghlWebhookUrl, prettyData);
-
-                console.log('✅ Forwarded clean data to GHL.');
-                res.status(200).send({ status: "success" });
-            } catch (error) {
-                console.error('JotForm Bridge Error:', error.message);
-                res.status(500).send({ error: error.message });
-            }
-        });
-
         res.status(200).send({ message: "Webhook received" });
-
     } catch (error) {
-        console.error('Webhook Error:', error.message);
+        console.error('Vapi Webhook Error:', error.message);
         res.status(500).send({ error: "Internal Error" });
     }
 });
