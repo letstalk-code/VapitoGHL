@@ -131,7 +131,44 @@ app.post('/webhook/vapi', async (req, res) => {
             }
         }
 
+        // --- JOTFORM BRIDGE ---
+        app.post('/webhook/jotform', async (req, res) => {
+            try {
+                const data = req.body;
+
+                // Translate JotForm "ugly" codes into your "pretty" GHL fields
+                const prettyData = {
+                    form_id: data.formID || "",
+                    form_title: data.formTitle || "",
+                    first_name: data.q15_bridesName?.first || data.q15_bridesName || "",
+                    last_name: data.q15_bridesName?.last || "",
+                    email: data.q113_email || data.email || "",
+                    phone: data.q37_phoneNumber || data.phone || "",
+                    brides_first_name: data.q15_bridesName?.first || "",
+                    brides_last_name: data.q15_bridesName?.last || "",
+                    grooms_first_name: data.q85_groomsName?.first || "",
+                    grooms_last_name: data.q85_groomsName?.last || "",
+                    event_date: `${data.q117_weddingDate?.month}/${data.q117_weddingDate?.day}/${data.q117_weddingDate?.year}` || "",
+                    venue_location: data.q88_weddingCeremony88 || "",
+                    reception_location: data.q89_weddingReception || ""
+                };
+
+                console.log('📬 Received JotForm signature for:', prettyData.form_title);
+
+                // Forward to GHL Master Router
+                const ghlWebhookUrl = "https://services.leadconnectorhq.com/hooks/NzbVVSNFa2G2M2oCiRWD/webhook-trigger/403456bf-d309-46ed-85f5-d7e822b62909";
+                await axios.post(ghlWebhookUrl, prettyData);
+
+                console.log('✅ Forwarded clean data to GHL.');
+                res.status(200).send({ status: "success" });
+            } catch (error) {
+                console.error('JotForm Bridge Error:', error.message);
+                res.status(500).send({ error: error.message });
+            }
+        });
+
         res.status(200).send({ message: "Webhook received" });
+
     } catch (error) {
         console.error('Webhook Error:', error.message);
         res.status(500).send({ error: "Internal Error" });

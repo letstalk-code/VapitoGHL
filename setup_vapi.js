@@ -83,7 +83,7 @@ CALENDAR BOOKING FLOW (CRITICAL):
     },
     voice: {
         provider: "vapi",
-        voice: "jennifer"
+        voiceId: "Leah"
     },
     serverUrl: SERVER_URL,
     serverMessages: ["end-of-call-report", "hang"],
