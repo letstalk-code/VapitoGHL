@@ -1,0 +1,9 @@
+.env
+node_modules
+*.log
+last_call.json
+.DS_Store
+ghl_mcp
+ghp_mcp_check.log
+mcp_settings.json
+ghl_mcp_check.log
