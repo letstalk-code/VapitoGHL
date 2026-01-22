@@ -83,16 +83,25 @@ app.post('/webhook/vapi', async (req, res) => {
         }
 
         if (message.type === 'end-of-call-report') {
+            console.log('--- 📞 END OF CALL REPORT RECEIVED ---');
             const analysis = message.analysis || {};
             const structuredData = analysis.structuredData || {};
             const ghlWebhookUrl = process.env.GHL_WEBHOOK_URL;
+
+            const payload = {
+                phone: message.call?.customer?.number || message.customer?.number || "Unknown",
+                name: structuredData.customerName || "Unknown contact",
+                email: structuredData.customerEmail || "",
+                summary: analysis.summary || "No summary"
+            };
+
+            console.log('Forwarding to GHL:', JSON.stringify(payload, null, 2));
+
             if (ghlWebhookUrl) {
-                await axios.post(ghlWebhookUrl, {
-                    phone: message.call?.customer?.number || message.customer?.number || "Unknown",
-                    name: structuredData.customerName || "Unknown contact",
-                    email: structuredData.customerEmail || "",
-                    summary: analysis.summary || "No summary"
-                });
+                await axios.post(ghlWebhookUrl, payload);
+                console.log('✅ Successfully forwarded to GHL');
+            } else {
+                console.log('❌ GHL_WEBHOOK_URL not found in environment');
             }
         }
         res.status(200).send({ message: "Webhook received" });
